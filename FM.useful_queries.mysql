@@ -1,0 +1,199 @@
+# General use searches
+
+SELECT MAX(crawled_at) FROM db_fm2.tbl_document -- Last time FDV crawled the 7P feed
+
+SELECT * FROM db_fm2.tbl_document WHERE external_id = 379517
+
+SELECT * FROM db_fm2.tbl_document WHERE firm_id = 29
+
+SELECT * FROM db_fm2.tbl_document WHERE normalized_date < "1970-01"
+
+SELECT * FROM db_fm2.tbl_document WHERE title LIKE "%symposium%"
+
+SELECT * FROM db_fm2.tbl_document WHERE document_status_id = 13
+
+--
+
+# Duplicate titles by firm and count
+
+SELECT firm_id,
+       title,
+       Count(*),
+       Group_concat(external_id ORDER BY external_id ASC) GroupedIds
+FROM   db_fm2.tbl_document
+GROUP  BY firm_id,
+          title
+HAVING ( Count(*) > 1 )
+
+--
+
+# Find documents that lag by 1 day
+
+SELECT COUNT(*)
+FROM db_fm2.tbl_document docs
+WHERE normalized_date >= "2017-01-17"
+AND Date(crawled_at) - Date(normalized_date) = 1
+
+--
+
+# Doc status in system
+
+SELECT ref.status,
+       Count(*)
+FROM   db_fm2.tbl_document docs
+       INNER JOIN db_fm2.tbl_ref_document_status ref
+               ON ref.id = DOCS.document_status_id
+       INNER JOIN db_fm2.tbl_firm firms
+               ON firms.id = DOCS.firm_id
+GROUP  BY ref.id
+
+--
+
+# Document status grouped by Firm
+
+SELECT firms.NAME firmName,
+       Count(*)   total,
+       Sum(CASE
+             WHEN docs.document_status_id IN ( 6, 7, 8 ) THEN 1
+             ELSE 0
+           END)   available,
+       Sum(CASE
+             WHEN docs.document_status_id = 0 THEN 1
+             ELSE 0
+           END)   downloadPending,
+       Sum(CASE
+             WHEN docs.document_status_id = 2 THEN 1
+             ELSE 0
+           END)   conversionPending,
+       Sum(CASE
+             WHEN docs.document_status_id = 6 THEN 1
+             ELSE 0
+           END)   classificationPending,
+       Sum(CASE
+             WHEN docs.document_status_id = 12 THEN 1
+             ELSE 0
+           END)   cloudConversionPending,
+       Sum(CASE
+             WHEN docs.document_status_id IN ( 1, 3, 5, 13 ) THEN 1
+             ELSE 0
+           END)   failedStatus
+FROM   db_fm2.tbl_document docs
+       INNER JOIN db_fm2.tbl_ref_document_status ref
+               ON ref.id = docs.document_status_id
+       INNER JOIN db_fm2.tbl_firm firms
+               ON firms.id = docs.firm_id
+GROUP  BY firms.id
+
+--
+
+# MySQL fragment that removes Intelligize, NBS, and FDV users
+
+SELECT *
+FROM   db_admin.tbl_rm_history history
+       JOIN db_admin.tbl_user u
+         ON u.userid = history.userid
+       JOIN db_admin.tbl_customer customer
+         ON customer.customerid = u.customerid
+WHERE  u.customerid NOT IN ( 1, 330, 2141, 2432 )
+
+--
+
+# Find all duplicates in database; Quereyception
+
+SELECT
+    max(id),
+    docsTable.external_id
+FROM
+    db_fm2.tbl_document docsTable
+INNER JOIN (
+    select
+        external_id,
+        sum(1) as total
+    FROM
+        db_fm2.tbl_document
+    GROUP BY
+        external_id
+    HAVING
+        sum(1) > 1) as docsTable2
+ON
+    docsTable.external_id = docsTable2.external_id
+GROUP BY
+    docsTable.external_id;
+
+--
+
+# Pull all dates by all firms for all available documents
+
+SELECT firms.name firm_id, 
+       normalized_date 
+FROM   db_fm2.tbl_document docs 
+       INNER JOIN db_fm2.tbl_firm firms 
+               ON firms.id = docs.firm_id 
+WHERE  docs.document_status_id = 8 
+LIMIT  100
+
+--
+
+# Pulls lag days for last 30 days
+
+SELECT Sum(days = 1)  AS lagDays1, 
+       Sum(days = 2)  AS lagDays2, 
+       Sum(days = 3)  AS lagDays3, 
+       Sum(days = 4)  AS lagDays4, 
+       Sum(days = 5)  AS lagDays5, 
+       Sum(days = 6)  AS lagDays6, 
+       Sum(days = 7)  AS lagDays7, 
+       Sum(days = 8)  AS lagDays8, 
+       Sum(days = 9)  AS lagDays9, 
+       Sum(days = 10) AS lagDays10, 
+       Sum(days = 11) AS lagDays11, 
+       Sum(days = 12) AS lagDays12, 
+       Sum(days = 13) AS lagDays13, 
+       Sum(days = 14) AS lagDays14, 
+       Sum(days = 15) AS lagDays15
+FROM   (SELECT Datediff(crawled_at, normalized_date) AS days 
+        FROM   db_fm2.tbl_document docs) lagTable 
+
+--
+
+# Pull 1000 random rows from a table
+
+SELECT   * 
+FROM     db_admin.tbl_user_agent_detail AS r1 
+JOIN 
+         ( 
+                SELECT Ceil(Rand() * 
+                       ( 
+                              SELECT Max(id) 
+                              FROM   db_admin.tbl_user_agent_detail)) AS id) AS r2 
+where    r1.id >= r2.id 
+AND      user_id != 0 
+ORDER BY r1.id ASC limit 1000
+
+--
+# Selects old duplicates from db for a particular firm
+
+SELECT * 
+FROM   db_fm2.tbl_document 
+WHERE  firm_id = 199 
+       AND document_status_id = 8 
+       AND external_id NOT IN (SELECT * 
+                               FROM   (SELECT Max(external_id) 
+                                       FROM   db_fm2.tbl_document 
+                                       GROUP  BY title) tmp) 
+
+--
+# Gets the count of user interaction over a time period. FM 2.0 launched on 2017.01.17
+
+SELECT 
+	Count(*) 
+	-- MemoSearchID, LoggedDate, QueryTime, total_records_found, TextContent, FromDate, ToDate, LawFirmsID
+FROM   db_admin.tbl_fm_history history
+       JOIN db_admin.tbl_user u
+        ON u.userid = history.userid
+       JOIN db_admin.tbl_customer customer
+		ON customer.customerid = u.customerid
+WHERE  u.customerid NOT IN ( 1, 2141, 330, 2432 )
+AND LoggedDate > '2017-01-17'
+	-- AND  LoggedDate > '2016-01-17'
+	-- AND LoggedDate < '2016-06-29'
