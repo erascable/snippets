@@ -171,6 +171,7 @@ AND      user_id != 0
 ORDER BY r1.id ASC limit 1000
 
 --
+
 # Selects old duplicates from db for a particular firm
 
 SELECT * 
@@ -183,6 +184,7 @@ WHERE  firm_id = 199
                                        GROUP  BY title) tmp) 
 
 --
+
 # Gets the count of user interaction over a time period. FM 2.0 launched on 2017.01.17
 
 SELECT 
@@ -195,5 +197,5 @@ FROM   db_admin.tbl_fm_history history
 		ON customer.customerid = u.customerid
 WHERE  u.customerid NOT IN ( 1, 2141, 330, 2432 )
 AND LoggedDate > '2017-01-17'
-	-- AND  LoggedDate > '2016-01-17'
+	-- AND LoggedDate > '2016-01-17'
 	-- AND LoggedDate < '2016-06-29'
